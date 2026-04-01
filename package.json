@@ -1,0 +1,12 @@
+{
+  "name": "url-monitor-runner",
+  "version": "1.0.0",
+  "description": "Runner de Playwright para monitor de URLs",
+  "main": "monitor.js",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "dependencies": {
+    "playwright": "^1.53.0"
+  }
+}
