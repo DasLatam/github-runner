@@ -2,55 +2,48 @@ const { fetchBatch } = require('./lib/fetchBatch');
 const { pushResults } = require('./lib/pushResults');
 const { runVisit, createBrowser } = require('./lib/runVisit');
 
-function requiredEnv(name) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Falta la variable de entorno ${name}`);
-  }
-  return value;
-}
-
-async function runWithConcurrency(items, browser, limit = 2) {
-  const results = [];
-  let index = 0;
+async function mapLimit(items, limit, asyncMapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
 
   async function worker() {
     while (true) {
-      const currentIndex = index++;
-      if (currentIndex >= items.length) return;
-      const item = items[currentIndex];
-      console.log(`Visitando [${item.id}] ${item.url}`);
-      const result = await runVisit(item, browser);
-      results.push(result);
-      console.log(`Resultado [${item.id}] ${result.status} ${result.load_ms || '-'} ms`);
+      const currentIndex = nextIndex++;
+      if (currentIndex >= items.length) break;
+      results[currentIndex] = await asyncMapper(items[currentIndex], currentIndex);
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
   return results;
 }
 
 async function main() {
-  requiredEnv('MONITOR_PULL_URL');
-  requiredEnv('MONITOR_PUSH_URL');
-  requiredEnv('MONITOR_SHARED_SECRET');
-
   const batch = await fetchBatch();
-  if (!batch.items || batch.items.length === 0) {
-    console.log('No hay URLs pendientes.');
+
+  const items = Array.isArray(batch.items) ? batch.items : [];
+  const leaseToken = batch.lease_token || '';
+
+  console.log(`Lote recibido: ${items.length} URL(s)`);
+
+  if (items.length === 0) {
+    console.log('No hay URLs pendientes para revisar.');
     return;
   }
 
-  console.log(`Lote recibido: ${batch.items.length} URL(s)`);
   const browser = await createBrowser();
 
   try {
-    const results = await runWithConcurrency(batch.items, browser, 2);
-    await pushResults({
-      lease_token: batch.lease_token,
-      results
+    const results = await mapLimit(items, 2, async (item) => {
+      console.log(`Visitando [${item.id}] ${item.url}`);
+      const result = await runVisit(item, browser);
+      console.log(`Resultado [${item.id}] ${result.status} ${result.load_ms} ms`);
+      return result;
     });
-    console.log(`Resultados enviados: ${results.length}`);
+
+    const pushed = await pushResults(leaseToken, results);
+    console.log(`Resultados enviados: ${pushed.updated_count ?? results.length}`);
   } finally {
     await browser.close().catch(() => {});
   }
