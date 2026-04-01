@@ -32,4 +32,4 @@ jobs:
           MONITOR_PULL_URL: ${{ secrets.MONITOR_PULL_URL }}
           MONITOR_PUSH_URL: ${{ secrets.MONITOR_PUSH_URL }}
           MONITOR_SHARED_SECRET: ${{ secrets.MONITOR_SHARED_SECRET }}
-          run: xvfb-run -a node monitor.js
+        run: xvfb-run -a node monitor.js
