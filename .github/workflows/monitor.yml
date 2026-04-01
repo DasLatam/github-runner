@@ -1,0 +1,37 @@
+name: URL Monitor
+
+on:
+  schedule:
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: url-monitor
+  cancel-in-progress: false
+
+jobs:
+  run-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run monitor
+        env:
+          MONITOR_PULL_URL: ${{ secrets.MONITOR_PULL_URL }}
+          MONITOR_PUSH_URL: ${{ secrets.MONITOR_PUSH_URL }}
+          MONITOR_SHARED_SECRET: ${{ secrets.MONITOR_SHARED_SECRET }}
+        run: node monitor.js
